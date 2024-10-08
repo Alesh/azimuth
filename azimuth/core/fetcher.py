@@ -10,9 +10,6 @@ from azimuth.core.models import QueryParams, Data
 try:
     import pandas as pd
 
-    _to_dataframe = pd.DataFrame.from_dict
-
-
     def _to_dataframe(iter_: Iterator[Data]) -> pd.DataFrame:
         return pd.DataFrame.from_dict([item.model_dump() for item in iter_])
 
@@ -28,9 +25,9 @@ class Fetcher(Generic[Q, D], Iterator[D], AsyncIterator[D]):
     """ Data fetcher base class
     """
 
-    def __init__(self, query: Q, url: URL) -> None:
+    def __init__(self, query: Q, url: URL | str) -> None:
         self.query = query
-        self._url = url
+        self._url = URL(url) if isinstance(url, str) else url
         self._data = []  # type: list[D]
 
     def __next__(self) -> D:

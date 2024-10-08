@@ -1,15 +1,20 @@
+from abc import abstractmethod, ABC
 from datetime import datetime, date, time
 from typing import Optional
 
 import pydantic
 from pydantic import Field, PositiveFloat, field_validator, NonNegativeFloat
 
-DateType = datetime | date
+from azimuth.core.utils import DateType, Interval, normalize_date
 
 
 class QueryParams(pydantic.BaseModel):
-    """ Base query model
+    """ Base query parameters model
     """
+
+    @abstractmethod
+    def make_url(self, base: str, **kwargs) -> str:
+        """ Makes internal url with query parameters. """
 
 
 class Data(pydantic.BaseModel):
@@ -17,7 +22,7 @@ class Data(pydantic.BaseModel):
     """
 
 
-class CandleQueryParams(QueryParams):
+class CandleQueryParams(QueryParams, ABC):
     """ Base candle query params model
     """
     symbol: str = Field(description="Symbol.")
@@ -25,16 +30,12 @@ class CandleQueryParams(QueryParams):
                                            description="Start of data range.")
     end_date: Optional[DateType] = Field(default=datetime.combine(date.today(), time.max),
                                          description="End of data range.")
-    interval: str = Field(default="1d", description="Data range.")
+    interval: Interval = Field(default="1d", description="Data range.")
 
     @field_validator("start_date", "end_date", mode="before")
     @classmethod
-    def start_date_validate(cls, value):
-        if not isinstance(value, (datetime, date)):
-            if ":" in str(value):
-                return datetime.fromisoformat(value)
-            return date.fromisoformat(value)
-        return value
+    def date_validate(cls, value):
+        return normalize_date(value)
 
 
 class CandleData(Data):
@@ -52,8 +53,4 @@ class CandleData(Data):
     @field_validator("date", mode="before")
     @classmethod
     def date_validate(cls, value):
-        if not isinstance(value, (datetime, date)):
-            if ":" in str(value):
-                return datetime.fromisoformat(value)
-            return datetime.fromisoformat(value)
-        return value
+        return normalize_date(value).astimezone()

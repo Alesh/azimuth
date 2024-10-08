@@ -2,7 +2,7 @@ import importlib
 import typing as t
 
 from .fetcher import Fetcher
-from .models import QueryParams, Data
+from azimuth.core.models import QueryParams, Data
 
 Q = t.TypeVar("Q", bound=QueryParams)
 D = t.TypeVar("D", bound=Data)

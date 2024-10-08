@@ -1,27 +1,17 @@
 import typing as t
-from datetime import datetime
 from warnings import warn
 
-from httpx import URL, Response
+from httpx import Response, URL
 from pydantic import field_validator
 
 import azimuth.core
-from azimuth.core.utils import end_date_timestamp, start_date_timestamp
+from azimuth.core.utils import start_to_timestamp, end_to_timestamp
 from azimuth.extensions.crypto import CryptoCandleData, CryptoCandleQueryParams
-
-QUOTE_PRECISION = {
-    'USDT': 2
-}
 
 
 class BinanceCandleData(CryptoCandleData):
     """ Binance candle data.
     """
-
-    @field_validator("date", mode="before")
-    @classmethod
-    def date_validate(cls, value):
-        return datetime.fromtimestamp(value / 1000)
 
 
 class BinanceCandleQueryParams(CryptoCandleQueryParams):
@@ -36,23 +26,24 @@ class BinanceCandleQueryParams(CryptoCandleQueryParams):
             return value
         raise ValueError("Interval must be one of {}".format(options))
 
+    def make_url(self, base_url, start_time: int = None) -> str:
+        """ Makes internal url with query parameters. """
+        start_time = start_time or start_to_timestamp(self.start_date)
+        end_time = end_to_timestamp(self.end_date)
+        return (f"{base_url}?symbol={self.symbol.replace('/', '')}&"
+                f"interval={self.interval}&limit=1000&timeZone=0&"
+                f"startTime={start_time}&endTime={end_time}")
+
 
 class BinanceCandleFetcher(azimuth.core.Fetcher[BinanceCandleQueryParams, list[BinanceCandleData]]):
     """ Binance candle data fetcher.
     """
+    BASE_URL = 'https://www.binance.com/api/v3/klines'
 
     def __init__(self, query: BinanceCandleQueryParams, /, market):
         assert market == 'spot', "Only spot market is supported"
-        self.start_time = start_date_timestamp(query.start_date)
-        self.end_time = end_date_timestamp(query.end_date)
-        super().__init__(query, self.make_url(query, self.start_time, self.end_time))
+        super().__init__(query, query.make_url(self.BASE_URL))
         self.count = 0
-
-    @staticmethod
-    def make_url(query: BinanceCandleQueryParams, start_time: int, end_time: int) -> URL:
-        return URL(f"https://www.binance.com/api/v3/klines?symbol={query.symbol.upper()}&"
-                   f"interval={query.interval}&limit=1000&timeZone=0&"
-                   f"startTime={start_time}&endTime={end_time}")
 
     def parse_response(self, resp: Response) -> tuple[list[BinanceCandleData], URL | None]:
         result = []
@@ -61,9 +52,9 @@ class BinanceCandleFetcher(azimuth.core.Fetcher[BinanceCandleQueryParams, list[B
         data = resp.json()
         if data:
             self.count += len(data)
-            self.start_time = data[-1][6] + 1
-            if self.start_time < self.end_time:
-                next_url = self.make_url(self.query, self.start_time, self.end_time)
+            start_time = data[-1][6] + 1
+            if start_time < end_to_timestamp(self.query.end_date):
+                next_url = self.query.make_url(self.BASE_URL, start_time)
             result.extend([BinanceCandleData(**dict(zip(['date', 'open', 'high', 'low', 'close', 'volume', 'value'],
                                                         item[:6] + [item[7]])))
                            for item in data])

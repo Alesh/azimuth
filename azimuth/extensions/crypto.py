@@ -1,17 +1,21 @@
-from pydantic import field_validator, Field, NonNegativeFloat
+from abc import ABC
+
+from pydantic import field_validator
 
 from azimuth.core.models import CandleData, CandleQueryParams
 from azimuth.core.providers import get_provider
 
 
-class CryptoCandleQueryParams(CandleQueryParams):
+class CryptoCandleQueryParams(CandleQueryParams, ABC):
     """ Base crypto candle query params model
     """
 
-    @field_validator("symbol", mode="before", check_fields=False)
+    @field_validator("symbol", mode="before")
     @classmethod
     def validate_symbol(cls, value: str):
-        return value.upper().replace("/", "").replace("-", "")
+        if "/" in value:
+            return value.upper()
+        raise ValueError("Invalid symbol, base and quote assets must be separated by '/'.")
 
 
 class CryptoCandleData(CandleData):
